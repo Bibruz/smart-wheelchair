@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Smart Wheelchair HMI — Бортовой контроллер</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- LEFT EMBEDDED SIDEBAR DOCK -->
+  <aside class="side-dock">
+    <div class="dock-top">
+      <div class="hw-badge" title="ESP32-WROOM-32 Telemetry Controller">
+        <span class="dot" id="sysDot"></span>
+        <span class="hw-code">ESP32</span>
+      </div>
+      <div class="hw-modules" id="sysStatusText">4/4 OK</div>
+    </div>
+
+    <div class="dock-divider"></div>
+
+    <nav class="dock-nav">
+      <button class="nav-btn active" data-tab="cockpit">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
+          <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
+          <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
+          <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
+        </svg>
+        <span class="nav-lbl">Пульт</span>
+      </button>
+
+      <button class="nav-btn" data-tab="wiring">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>
+          <line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>
+          <line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>
+          <line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>
+          <line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
+        </svg>
+        <span class="nav-lbl">Схема</span>
+      </button>
+
+      <button class="nav-btn" data-tab="automation">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <polyline points="9 12 11 14 15 10"/>
+        </svg>
+        <span class="nav-lbl">Правила</span>
+      </button>
+
+      <button class="nav-btn" data-tab="analytics">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3"/>
+          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+        </svg>
+        <span class="nav-lbl">Облако</span>
+      </button>
+    </nav>
+
+    <div class="dock-bottom">
+      <button class="dock-util-btn" id="themeToggle" title="Переключить тему (Ночь / День)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <span>День</span>
+      </button>
+
+      <button class="dock-util-btn" id="soundToggle" title="Звуковые сигналы">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        </svg>
+        <span>Звук</span>
+      </button>
+    </div>
+  </aside>
+
+  <div id="toastContainer"></div>
+
+  <!-- MAIN WORKSPACE -->
+  <main>
+    <!-- ==================== TAB 1: COCKPIT ==================== -->
+    <section id="tab-cockpit" class="tab-page active">
+      <div class="cockpit-grid">
+        <!-- LEFT COLUMN: RADAR + JOYSTICK -->
+        <div class="left-col">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">2D-Радар и кинематика шасси</span>
+              <span class="badge" id="motionBadge">ОЖИДАНИЕ</span>
+            </div>
+
+            <div class="radar-stage">
+              <div class="dist-tag dist-front" id="radarFrontLabel">Спереди: 145 см</div>
+              <div class="dist-tag dist-rear" id="radarRearLabel">Сзади: 350 см</div>
+
+              <!-- ANIMATED SVG WHEELCHAIR (TOP VIEW) -->
+              <svg id="wheelchairSvg" width="230" height="235" viewBox="0 0 240 250">
+                <defs>
+                  <radialGradient id="beamGrad" cx="50%" cy="100%" r="90%">
+                    <stop offset="0%" stop-color="#FF9F1C" stop-opacity="0.6" />
+                    <stop offset="100%" stop-color="#FF9F1C" stop-opacity="0" />
+                  </radialGradient>
+                </defs>
+
+                <!-- Headlight Cone -->
+                <polygon id="headlightCone" points="105,72 135,72 175,5 65,5" fill="url(#beamGrad)" opacity="0" />
+
+                <!-- Dynamic Obstacle Blip in Front Sensor Cone -->
+                <g id="radarObstacleGroup" transform="translate(120, 22)" opacity="0.85">
+                  <ellipse cx="0" cy="0" rx="18" ry="8" fill="rgba(255, 159, 28, 0.25)" stroke="#FF9F1C" stroke-width="1.5" />
+                  <circle cx="0" cy="0" r="3" fill="#FF9F1C" />
+                </g>
+
+                <!-- Front Ultrasonic Sonar Arcs -->
+                <path id="sonarFront1" d="M 92 58 Q 120 42 148 58" fill="none" stroke="#00E599" stroke-width="2.5" stroke-linecap="round" opacity="0.85" />
+                <path id="sonarFront2" d="M 80 44 Q 120 22 160 44" fill="none" stroke="#00E599" stroke-width="2" stroke-linecap="round" opacity="0.5" />
+                <path id="sonarFront3" d="M 68 30 Q 120 2 172 30" fill="none" stroke="#00E599" stroke-width="1.5" stroke-linecap="round" opacity="0.25" />
+
+                <!-- Rear Ultrasonic Sonar Arc -->
+                <path id="sonarRear" d="M 95 196 Q 120 214 145 196" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" opacity="0.6" />
+
+                <!-- Front Caster Wheels -->
+                <g id="casterLeft" transform="translate(86, 82)">
+                  <rect x="-5" y="-12" width="10" height="24" rx="4" fill="#71717A" stroke="#E4E4E7" stroke-width="1.5" />
+                </g>
+                <g id="casterRight" transform="translate(154, 82)">
+                  <rect x="-5" y="-12" width="10" height="24" rx="4" fill="#71717A" stroke="#E4E4E7" stroke-width="1.5" />
+                </g>
+
+                <!-- Main Drive Wheels -->
+                <g transform="translate(66, 145)">
+                  <rect x="-10" y="-32" width="20" height="64" rx="6" fill="#18181B" stroke="#00E599" stroke-width="2" />
+                  <line id="treadL1" x1="-8" y1="-20" x2="8" y2="-20" stroke="#00E599" stroke-width="2" />
+                  <line id="treadL2" x1="-8" y1="0" x2="8" y2="0" stroke="#00E599" stroke-width="2" />
+                  <line id="treadL3" x1="-8" y1="20" x2="8" y2="20" stroke="#00E599" stroke-width="2" />
+                </g>
+                <g transform="translate(174, 145)">
+                  <rect x="-10" y="-32" width="20" height="64" rx="6" fill="#18181B" stroke="#00E599" stroke-width="2" />
+                  <line id="treadR1" x1="-8" y1="-20" x2="8" y2="-20" stroke="#00E599" stroke-width="2" />
+                  <line id="treadR2" x1="-8" y1="0" x2="8" y2="0" stroke="#00E599" stroke-width="2" />
+                  <line id="treadR3" x1="-8" y1="20" x2="8" y2="20" stroke="#00E599" stroke-width="2" />
+                </g>
+
+                <!-- Chassis & Seat -->
+                <rect x="80" y="74" width="80" height="106" rx="14" fill="#27272A" stroke="#A1A1AA" stroke-width="2" />
+                <rect x="88" y="92" width="64" height="58" rx="8" fill="#121215" stroke="#3F3F46" stroke-width="1.5" />
+                <rect x="84" y="156" width="72" height="18" rx="6" fill="#3F3F46" />
+                <path d="M 90 74 L 94 58 L 146 58 L 150 74 Z" fill="#3F3F46" stroke="#71717A" stroke-width="1.5" />
+                <rect id="headlightLed" x="112" y="68" width="16" height="5" rx="2" fill="#52525B" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- JOYSTICK & HARDWARE CONTROLS -->
+          <div class="card" id="cardMotors">
+            <div class="card-header">
+              <span class="card-title">Контроллер движения и приводов</span>
+              <span class="badge" id="badgeMotors">L298N: АКТИВЕН</span>
+            </div>
+            <div class="drive-box">
+              <div class="joystick-wrap">
+                <div class="joystick-base" id="joystickBase">
+                  <div class="joystick-crosshair"></div>
+                  <div class="joystick-knob" id="joystickKnob"></div>
+                </div>
+                <div class="joy-hint">Стик 360° или W A S D</div>
+              </div>
+
+              <div class="mode-group">
+                <div class="card-title" style="font-size:11px;">Профиль скорости</div>
+                <div class="mode-pills">
+                  <button class="mode-btn active" data-mode="comfort">Комфорт<span>до 3 км/ч</span></button>
+                  <button class="mode-btn" data-mode="street">Улица<span>до 8 км/ч</span></button>
+                  <button class="mode-btn" data-mode="park">Парковка<span>Тормоз</span></button>
+                </div>
+
+                <div class="actuator-row" style="margin-top:4px;">
+                  <button class="btn-toggle" id="btnHeadlight"> Фара: ВЫКЛ</button>
+                  <button class="btn-toggle" id="btnHorn"> Сигнал</button>
+                </div>
+
+                <div class="actuator-row">
+                  <button class="btn-estop" id="btnEstop"> СТОП</button>
+                  <button class="btn-sos" id="btnSos"> SOS ВЫЗОВ</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: 4 SENSOR CARDS + 2D OBSTACLE MAP + LOG -->
+        <div class="right-col">
+          <div class="metrics-grid">
+            <div class="card" id="cardSpeed">
+              <div class="card-header">
+                <span class="card-title">Скорость (Энкодеры)</span>
+                <span class="badge" id="badgeSpeed">OK</span>
+              </div>
+              <div class="metric-val" id="valSpeed" style="color:var(--accent);">0.0 <small style="font-size:14px;">км/ч</small></div>
+              <div class="metric-sub" id="subDirection">Курс: 0° • Путь: 0 м</div>
+              <div class="progress-track">
+                <div class="progress-fill" id="barSpeed" style="width:0%; background:var(--accent);"></div>
+              </div>
+            </div>
+
+            <div class="card" id="cardBattery">
+              <div class="card-header">
+                <span class="card-title">АКБ (INA219 I²C)</span>
+                <span class="badge" id="badgeBattery">24.8 В</span>
+              </div>
+              <div class="metric-val" id="valBattery" style="color:var(--emerald);">86 <small style="font-size:14px;">%</small></div>
+              <div class="metric-sub" id="subCurrent">1.2 А • Запас: ~17.2 км</div>
+              <div class="progress-track">
+                <div class="progress-fill" id="barBattery" style="width:86%;"></div>
+              </div>
+            </div>
+
+            <div class="card" id="cardSonar">
+              <div class="card-header">
+                <span class="card-title">Сонар (HC-SR04)</span>
+                <span class="badge" id="badgeSonar">БЕЗОПАСНО</span>
+              </div>
+              <div class="metric-val" id="valSonar" style="color:var(--emerald);">145 <small style="font-size:14px;">см</small></div>
+              <div class="metric-sub" id="subSonarRear">Задний датчик: 350 см</div>
+              <div class="progress-track">
+                <div class="progress-fill" id="barSonar" style="width:41%;"></div>
+              </div>
+            </div>
+
+            <div class="card" id="cardTilt">
+              <div class="card-header">
+                <span class="card-title">Гироскоп (MPU6050)</span>
+                <span class="badge" id="badgeTilt">НОРМА</span>
+              </div>
+              <div class="metric-val" id="valTilt">2.0°</div>
+              <div class="metric-sub" id="subTilt">Уклон пандуса в норме</div>
+              <div class="progress-track">
+                <div class="progress-fill" id="barTilt" style="width:10%; background:var(--purple);"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2D OBSTACLE & TRAJECTORY MAP + EVENT LOG -->
+          <div class="bottom-split">
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">2D-карта препятствий и трек</span>
+                <div style="display:flex; gap:6px;">
+                  <button class="mini-btn" id="btnMapZoom" title="Переключить радиус обзора карты">8 м</button>
+                  <button class="mini-btn" id="btnResetTrack">Сброс</button>
+                </div>
+              </div>
+              <canvas id="trajectoryCanvas" style="cursor:crosshair;" title="Кликните по карте, чтобы поставить или убрать препятствие"></canvas>
+            </div>
+
+            <div class="card" style="display:flex; flex-direction:column;">
+              <div class="card-header">
+                <span class="card-title">Телеметрия и события</span>
+                <button class="mini-btn" id="btnClearLog">Очистить</button>
+              </div>
+              <div class="console-box" id="consoleLog"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: WIRING DIAGRAM ==================== -->
+    <section id="tab-wiring" class="tab-page">
+      <div class="wiring-toolbar">
+        <div class="btn-group">
+          <button class="btn-action primary" id="btnAutoWire"> Собрать схему автоматически</button>
+          <button class="btn-action" id="btnClearWires"> Сбросить все провода</button>
+        </div>
+        <div class="brand-status">
+          <span>Кликните по пину модуля, затем по пину ESP32 (клик по проводу удаляет его)</span>
+        </div>
+      </div>
+
+      <div class="wiring-layout">
+        <div class="svg-board-wrap">
+          <svg id="wiringSvg" viewBox="0 0 820 480">
+            <g id="wiresLayer"></g>
+            <g id="pulsesLayer"></g>
+
+            <!-- CENTER BOARD: ESP32 DEVKIT -->
+            <g class="board-unit" data-module="esp32">
+              <rect x="320" y="85" width="180" height="310" rx="14" fill="#18181B" stroke="#00E599" stroke-width="2" />
+              <rect x="355" y="100" width="110" height="55" rx="6" fill="#09090B" stroke="#3F3F46" />
+              <text x="410" y="132" fill="#A1A1AA" font-size="12" font-family="monospace" text-anchor="middle">ESP32-WROOM</text>
+              <text x="410" y="245" fill="#FAFAFA" font-size="15" font-weight="bold" font-family="sans-serif" text-anchor="middle">ESP32 DevKit</text>
+              <text x="410" y="265" fill="#00E599" font-size="11" font-family="monospace" text-anchor="middle">Wi-Fi + Cloud API</text>
+            </g>
+
+            <!-- MODULE 1: HC-SR04 -->
+            <g class="board-unit" data-module="sonar" style="cursor:pointer;">
+              <rect x="25" y="40" width="180" height="160" rx="12" fill="#18181B" stroke="#3F3F46" stroke-width="2" />
+              <circle cx="65" cy="95" r="22" fill="#09090B" stroke="#71717A" stroke-width="2" />
+              <circle cx="65" cy="150" r="22" fill="#09090B" stroke="#71717A" stroke-width="2" />
+              <text x="115" y="65" fill="#FAFAFA" font-size="13" font-weight="bold" text-anchor="middle">HC-SR04 (Сонар)</text>
+            </g>
+
+            <!-- MODULE 2: INA219 -->
+            <g class="board-unit" data-module="battery" style="cursor:pointer;">
+              <rect x="25" y="255" width="180" height="170" rx="12" fill="#18181B" stroke="#3F3F46" stroke-width="2" />
+              <rect x="45" y="305" width="55" height="65" rx="6" fill="#09090B" stroke="#00E599" stroke-width="1.5" />
+              <text x="72" y="342" fill="#00E599" font-size="11" font-family="monospace" text-anchor="middle">24V BAT</text>
+              <text x="115" y="280" fill="#FAFAFA" font-size="13" font-weight="bold" text-anchor="middle">INA219 (АКБ)</text>
+            </g>
+
+            <!-- MODULE 3: MPU6050 -->
+            <g class="board-unit" data-module="tilt" style="cursor:pointer;">
+              <rect x="615" y="40" width="180" height="170" rx="12" fill="#18181B" stroke="#3F3F46" stroke-width="2" />
+              <rect x="715" y="100" width="55" height="55" rx="8" fill="#09090B" stroke="#A855F7" stroke-width="1.5" />
+              <text x="742" y="132" fill="#A855F7" font-size="10" font-family="monospace" text-anchor="middle">GYRO 3D</text>
+              <text x="705" y="65" fill="#FAFAFA" font-size="13" font-weight="bold" text-anchor="middle">MPU6050 (Уклон)</text>
+            </g>
+
+            <!-- MODULE 4: L298N -->
+            <g class="board-unit" data-module="motors" style="cursor:pointer;">
+              <rect x="615" y="255" width="180" height="170" rx="12" fill="#18181B" stroke="#3F3F46" stroke-width="2" />
+              <rect x="715" y="305" width="55" height="65" rx="6" fill="#09090B" stroke="#38BDF8" stroke-width="1.5" />
+              <text x="742" y="342" fill="#38BDF8" font-size="10" font-family="monospace" text-anchor="middle">MOTORS</text>
+              <text x="705" y="280" fill="#FAFAFA" font-size="13" font-weight="bold" text-anchor="middle">L298N (Драйвер)</text>
+            </g>
+
+            <g id="pinsLayer"></g>
+          </svg>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Инспектор модуля</span>
+            <span class="badge" id="wireCountBadge">16/16 пинов</span>
+          </div>
+          <h3 id="inspTitle" style="font-size:16px; margin-bottom:6px;">ESP32 DevKit V1</h3>
+          <p id="inspDesc" style="font-size:13px; color:var(--text-muted); line-height:1.45;">
+            Кликните по любой плате на схеме слева, чтобы посмотреть её назначение и таблицу распиновки. Отключение проводов переводит датчики на пульте в статус «Нет сигнала».
+          </p>
+          <div class="inspector-list" id="inspPins"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: AUTOMATION & SIMULATOR ==================== -->
+    <section id="tab-automation" class="tab-page">
+      <div class="auto-grid">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Правила автоматической безопасности</span>
+            <span class="badge">АКТИВНЫ</span>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-formula">
+              <span class="tag-kw">ЕСЛИ</span> препятствие спереди < <strong id="lblBrakeThresh">30 см</strong>
+              <span class="tag-kw">ТО</span> экстренный автотормоз + тревога
+            </div>
+            <div class="slider-row" style="margin-bottom:0;">
+              <div class="slider-label">Порог автоторможения <span id="valBrakeThresh">30 см</span></div>
+              <input type="range" id="inpBrakeThresh" min="15" max="80" value="30" />
+            </div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-formula">
+              <span class="tag-kw">ЕСЛИ</span> заряд АКБ < <strong id="lblBatThresh">20%</strong>
+              <span class="tag-kw">ТО</span> автопереход в режим «Комфорт» (≤ 3 км/ч)
+            </div>
+            <div class="slider-row" style="margin-bottom:0;">
+              <div class="slider-label">Порог энергосбережения <span id="valBatThresh">20%</span></div>
+              <input type="range" id="inpBatThresh" min="10" max="40" value="20" />
+            </div>
+          </div>
+
+          <div class="rule-card" style="margin-bottom:0;">
+            <div class="rule-formula">
+              <span class="tag-kw">ЕСЛИ</span> уклон > <strong id="lblTiltThresh">12°</strong> — ограничение скорости;
+              <span class="tag-kw">ЕСЛИ</span> > <strong>22°</strong> — авто-SOS (опрокидывание)
+            </div>
+            <div class="slider-row" style="margin-bottom:0;">
+              <div class="slider-label">Критический угол пандуса <span id="valTiltThresh">12°</span></div>
+              <input type="range" id="inpTiltThresh" min="6" max="20" value="12" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Симулятор внешней среды (для защиты)</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <button id="btnSecretPedMode" title="Секретный режим: отключение защиты от наезда" style="background:transparent; border:1px solid transparent; color:var(--text-muted); opacity:0.22; cursor:pointer; font-size:12px; padding:2px 6px; border-radius:6px; transition:0.2s;">☠️</button>
+              <span class="badge warn">ИНТЕРАКТИВ</span>
+            </div>
+          </div>
+
+          <div class="slider-row">
+            <div class="slider-label">Поставить препятствие спереди на <span id="simFrontVal">145 см</span></div>
+            <input type="range" id="simFront" min="15" max="350" value="145" />
+          </div>
+
+          <div class="slider-row">
+            <div class="slider-label">Поставить препятствие сзади на <span id="simRearVal">350 см</span></div>
+            <input type="range" id="simRear" min="15" max="350" value="350" />
+          </div>
+
+          <div class="slider-row">
+            <div class="slider-label">Угол наклона пандуса (MPU6050) <span id="simTiltVal">2°</span></div>
+            <input type="range" id="simTilt" min="0" max="28" value="2" />
+          </div>
+
+          <div class="slider-row">
+            <div class="slider-label">Уровень заряда АКБ (INA219) <span id="simBatVal">86%</span></div>
+            <input type="range" id="simBat" min="5" max="100" value="86" />
+          </div>
+
+          <div class="card-title" style="font-size:11px; margin-top:10px;">Быстрые сценарии демонстрации:</div>
+          <div class="scenario-btns">
+            <button class="btn-action" id="scenWall"> Стена (22 см)</button>
+            <button class="btn-action" id="scenRamp"> Пандус (16°)</button>
+            <button class="btn-action" id="scenLowBat"> Разряд (15%)</button>
+            <button class="btn-action" id="scenRollover" style="border-color:var(--crimson); color:#FCA5A5;">🚨 Падение (24°)</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: ANALYTICS & CLOUD DB ==================== -->
+    <section id="tab-analytics" class="tab-page">
+      <div class="stats-row">
+        <div class="card">
+          <div class="card-title">Пройдено метров</div>
+          <div class="metric-val" id="statDist" style="color:var(--accent);">0 м</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Срабатываний автотормоза</div>
+          <div class="metric-val" id="statBrakes" style="color:var(--crimson);">0</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Записей в облаке / БД</div>
+          <div class="metric-val" id="statRecords" style="color:var(--emerald);">0</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Статус синхронизации</div>
+          <div class="metric-val" id="statCloudMode" style="font-size:18px; margin-top:10px; color:var(--amber);">Local Cloud</div>
+        </div>
+      </div>
+
+      <div class="analytics-grid">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">График скорости (км/ч) и дистанции (см) в реальном времени</span>
+            <span class="badge">LIVE CANVAS</span>
+          </div>
+          <canvas id="telemetryChart"></canvas>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Живой JSON-пакет телеметрии</span>
+            <button class="mini-btn" id="btnCopyJson">Копировать</button>
+          </div>
+          <pre class="json-view" id="liveJsonView">{}</pre>
+        </div>
+      </div>
+
+      <div class="cloud-grid">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Подключение облачного сервиса (Supabase / Firebase)</span>
+          </div>
+          <div class="form-group">
+            <label>Провайдер облачной БД</label>
+            <select class="form-control" id="cloudProvider">
+              <option value="local">Встроенное облако (LocalStorage эмулятор)</option>
+              <option value="supabase">Supabase REST API (PostgreSQL)</option>
+              <option value="firebase">Firebase Realtime Database</option>
+            </select>
+          </div>
+          <div class="form-group" id="cloudUrlGroup" style="display:none;">
+            <label id="cloudUrlLabel">Supabase Project URL</label>
+            <input type="text" class="form-control" id="cloudUrl" placeholder="https://xyzcompany.supabase.co" />
+          </div>
+          <div class="form-group" id="cloudKeyGroup" style="display:none;">
+            <label>Supabase Anon Public Key</label>
+            <input type="text" class="form-control" id="cloudKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." />
+          </div>
+          <div class="btn-group">
+            <button class="btn-action primary" id="btnSaveCloud"> Отправить в облако</button>
+            <button class="btn-action" id="btnExportCsv"> Скачать CSV</button>
+            <button class="btn-action" id="btnClearDb">Очистить</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">История телеметрии в базе данных</span>
+            <span class="badge" id="dbBadge">ПОСЛЕДНИЕ ЗАПИСИ</span>
+          </div>
+          <div class="db-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Время</th>
+                  <th>Режим</th>
+                  <th>Скор.</th>
+                  <th>АКБ</th>
+                  <th>Сонар</th>
+                  <th>Событие</th>
+                </tr>
+              </thead>
+              <tbody id="dbTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
