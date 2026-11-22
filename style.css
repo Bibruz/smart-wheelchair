@@ -218,6 +218,18 @@ body {
   opacity: 0.5;
 }
 
+.app-dl-btn {
+  text-decoration: none;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.app-dl-btn:hover {
+  background: var(--accent);
+  color: #FFFFFF;
+}
+
 /* MAIN WORKSPACE */
 main {
   flex: 1;
